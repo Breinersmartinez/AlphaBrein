@@ -114,15 +114,21 @@ public class ChatService {
 
     // Obtener todas las sesiones de un usuario
     public List<ChatSession> getUserSessions(User user) {
-        return chatSessionRepository.findByUser(user);
+        return chatSessionRepository.findByUserAndActiva(user, true);
     }
 
     // Cerrar sesión
-    public void closeSession(String sessionId) {
+    public void closeSession(String sessionId, User user) {
         ChatSession session = chatSessionRepository.findBySessionId(sessionId)
                 .orElseThrow(() -> new RuntimeException("Sesión no encontrada"));
+
+        if (!session.getUser().getIdCard().equals(user.getIdCard())) {
+            throw new RuntimeException("No tienes permiso");
+        }
+
         session.setActiva(false);
         session.setUpdatedAt(LocalDateTime.now());
+
         chatSessionRepository.save(session);
     }
 }

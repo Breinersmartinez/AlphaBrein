@@ -38,25 +38,31 @@ public class ChatController {
     // Enviar mensaje
     @PostMapping("/message")
     public ResponseEntity<ChatMessageResponse> sendMessage(
+            @RequestParam String sessionId,
             @RequestBody ChatMessageRequest request,
             Authentication authentication) {
+
         try {
             User user = (User) authentication.getPrincipal();
-            ChatSession session = chatService.getOrCreateSession(user);
 
-            String response = chatService.sendMessageToN8n(session.getSessionId(), request.getChatInput());
+            String response = chatService.sendMessageToN8n(
+                    sessionId,
+                    request.getChatInput()
+            );
 
             ChatMessageResponse messageResponse = new ChatMessageResponse(
-                    session.getSessionId(),
+                    sessionId,
                     request.getChatInput(),
                     response
             );
 
             return ResponseEntity.ok(messageResponse);
+
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
+
 
     // Obtener historial de una sesión
     @GetMapping("/session/{sessionId}/history")
@@ -89,9 +95,14 @@ public class ChatController {
     public ResponseEntity<Void> closeSession(
             @PathVariable String sessionId,
             Authentication authentication) {
+
         try {
-            chatService.closeSession(sessionId);
+            User user = (User) authentication.getPrincipal();
+
+            chatService.closeSession(sessionId, user);
+
             return ResponseEntity.ok().build();
+
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
