@@ -50,7 +50,7 @@ const ChatWindow = ({ sessionId, onClose, sessionName }) => {
     };
 
     // Agregar mensaje del usuario optimísticamente
-    setMessages([...messages, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     const inputText = inputValue;
     setInputValue('');
 
