@@ -53,11 +53,11 @@ class ChatService {
   static async getSessionHistory(sessionId) {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/chat/session/${sessionId}/history`,
-        {
-          method: 'GET',
-          headers: AuthService.getAuthHeaders(),
-        }
+          `${import.meta.env.VITE_API_URL}/api/chat/session/${sessionId}/history`,
+          {
+            method: 'GET',
+            headers: AuthService.getAuthHeaders(),
+          }
       );
 
       if (AuthService.handleResponseError(response)) {
@@ -66,13 +66,35 @@ class ChatService {
 
       const data = await response.json();
 
+      console.log("DATA HISTORIAL:", data);
+
       if (!response.ok) {
         console.error('Response data:', data);
         throw new Error(data.message || data.error || 'Error al obtener historial');
       }
 
-      // Retornar los mensajes si existen, sino un array vacío
-      return data.mensajes || [];
+      return (data.mensajes || []).map(msg => {
+
+        let parsedText = msg.mensaje;
+
+        // Si es mensaje del AI intentar parsear JSON
+        if (msg.sender === 'AGENT' && typeof msg.mensaje === 'string') {
+          try {
+            const parsed = JSON.parse(msg.mensaje);
+            parsedText = parsed.output || msg.mensaje;
+          } catch (e) {
+            parsedText = msg.mensaje;
+          }
+        }
+
+        return {
+          id: msg.id,
+          text: parsedText,
+          sender: msg.sender === 'USER' ? 'user' : 'ai',
+          timestamp: msg.fechaEnvio,
+        };
+      });
+
     } catch (error) {
       console.error('Error en getSessionHistory:', error);
       throw error;
