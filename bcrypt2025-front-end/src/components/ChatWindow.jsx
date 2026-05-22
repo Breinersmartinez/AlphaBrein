@@ -77,7 +77,7 @@ const ChatWindow = ({ sessionId, onClose, sessionName }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900">
+    <div className="h-screen w-screen bg-slate-900 flex flex-col">
       {/* Header */}
       <div className="bg-black border-b border-gray-700 px-6 py-4 flex justify-between items-center">
         <div>
