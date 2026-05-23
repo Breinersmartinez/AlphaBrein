@@ -40,16 +40,10 @@ public class ChatService {
 
     // Crear o obtener sesión para un usuario
     public ChatSession getOrCreateSession(User user) {
-        List<ChatSession> activeSessions = chatSessionRepository.findByUserAndActiva(user, true);
-
-        if (!activeSessions.isEmpty()) {
-            ChatSession session = activeSessions.get(0);
-            session.setFechaUltimaInteraccion(LocalDateTime.now());
-            return chatSessionRepository.save(session);
-        }
-
+        // Siempre crea una nueva sesión
         String sessionId = UUID.randomUUID().toString();
-        ChatSession session = new ChatSession(sessionId, user, sessionId);
+        String n8nSessionId = UUID.randomUUID().toString(); // UUID distinto para n8n
+        ChatSession session = new ChatSession(sessionId, user, n8nSessionId);
         return chatSessionRepository.save(session);
     }
 
