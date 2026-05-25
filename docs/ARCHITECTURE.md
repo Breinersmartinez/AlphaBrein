@@ -1,40 +1,17 @@
 # ARCHITECTURE.md - Arquitectura del Sistema AlphaBrein
 
-## 📐 Descripción General de la Arquitectura
+##  Descripción General de la Arquitectura
 
 AlphaBrein está diseñado siguiendo una **arquitectura de 3 capas** (Three-Tier Architecture) con componentes claramente separados por responsabilidades, permitiendo escalabilidad horizontal y mantenibilidad.
 
 ---
 
-## 🏗 Capas de la Arquitectura
+##  Capas de la Arquitectura
 
 ### Capa 1: Presentación (Frontend)
 **Tecnología**: React 19 + Vite + Tailwind CSS
 
-```
-┌─────────────────────────────────────────┐
-│         CAPA DE PRESENTACIÓN             │
-├─────────────────────────────────────────┤
-│                                         │
-│  React Components                       │
-│  ├── Login                              │
-│  ├── ClientSignUp                       │
-│  ├── Dashboard (USER)                   │
-│  ├── UserDashboard (ADMIN)              │
-│  └── ChatWindow                         │
-│                                         │
-│  State Management                       │
-│  └── AuthContext (Context API)          │
-│                                         │
-│  HTTP Clients                           │
-│  ├── AuthService                        │
-│  └── ChatService                        │
-│                                         │
-│  Styling                                │
-│  └── Tailwind CSS                       │
-│                                         │
-└─────────────────────────────────────────┘
-```
+![capa presentacion front.png](image/capa%20presentacion%20front.png)
 
 **Responsabilidades**:
 - Renderizar interfaz de usuario
@@ -48,38 +25,7 @@ AlphaBrein está diseñado siguiendo una **arquitectura de 3 capas** (Three-Tier
 ### Capa 2: Negocio (Backend)
 **Tecnología**: Spring Boot 3 + Java 17
 
-```
-┌─────────────────────────────────────────┐
-│         CAPA DE NEGOCIO                  │
-├─────────────────────────────────────────┤
-│                                         │
-│  Controllers (REST Endpoints)           │
-│  ├── AuthController                     │
-│  ├── ChatController                     │
-│  └── UserController                     │
-│                                         │
-│  Services (Lógica de Negocio)           │
-│  ├── AuthService                        │
-│  ├── UserService                        │
-│  └── ChatService                        │
-│                                         │
-│  DTOs (Data Transfer Objects)           │
-│  ├── LoginRequest/AuthResponse          │
-│  ├── ChatMessageRequest/Response        │
-│  ├── RegisterRequest/UserResponse       │
-│  └── ChatSessionDetailDto               │
-│                                         │
-│  Seguridad                              │
-│  ├── JwtService                         │
-│  ├── JwtAuthenticationFilter            │
-│  └── SecurityConfig                     │
-│                                         │
-│  Integraciones                          │
-│  ├── n8n Webhook (RestTemplate)         │
-│  └── Email Service (JavaMailSender)     │
-│                                         │
-└─────────────────────────────────────────┘
-```
+![capa presentacion back.png](image/capa%20presentacion%20back.png)
 
 **Responsabilidades**:
 - Procesar solicitudes HTTP
@@ -94,30 +40,7 @@ AlphaBrein está diseñado siguiendo una **arquitectura de 3 capas** (Three-Tier
 ### Capa 3: Persistencia (Base de Datos)
 **Tecnología**: PostgreSQL + Hibernate ORM + JPA
 
-```
-┌─────────────────────────────────────────┐
-│         CAPA DE PERSISTENCIA             │
-├─────────────────────────────────────────┤
-│                                         │
-│  JPA Repositories                       │
-│  ├── UserRepository                     │
-│  ├── ChatSessionRepository              │
-│  └── ChatMessageRepository              │
-│                                         │
-│  Entidades JPA (Domain Models)          │
-│  ├── User                               │
-│  ├── ChatSession                        │
-│  └── ChatMessage                        │
-│                                         │
-│  Database (PostgreSQL)                  │
-│  ├── USUARIO                            │
-│  ├── CHAT_SESSION                       │
-│  └── CHAT_MESSAGE                       │
-│                                         │
-│  Connection Pool (HikariCP)             │
-│                                         │
-└─────────────────────────────────────────┘
-```
+![capa persistencia.png](image/capa%20persistencia.png)
 
 **Responsabilidades**:
 - Persistir datos en PostgreSQL
@@ -128,360 +51,26 @@ AlphaBrein está diseñado siguiendo una **arquitectura de 3 capas** (Three-Tier
 
 ---
 
-## 🔄 Flujo de Datos - Arquitectura en Capas
+##  Flujo de Datos - Arquitectura en Capas
 
-```
-CLIENT (Browser)
-      │
-      │ HTTP Request
-      ▼
-┌─────────────────────────────────────┐
-│  Frontend (React + Context)         │
-├─────────────────────────────────────┤
-│ 1. User interacts with UI           │
-│ 2. Event dispatched (login, chat)   │
-│ 3. AuthContext updated              │
-│ 4. API call via Fetch               │
-└──────────────┬──────────────────────┘
-               │ REST JSON
-               ▼
-        NETWORK (CORS enabled)
-               │
-               ▼
-┌─────────────────────────────────────┐
-│  Backend (Spring Boot)              │
-├─────────────────────────────────────┤
-│ 1. Controller receives request      │
-│ 2. JwtAuthenticationFilter validates│
-│ 3. SecurityContext sets user        │
-│ 4. Service processes business logic │
-│ 5. Repository queries database     │
-│ 6. Response marshalled to JSON      │
-└──────────────┬──────────────────────┘
-               │ REST JSON
-               ▼
-┌─────────────────────────────────────┐
-│  Database (PostgreSQL)              │
-├─────────────────────────────────────┤
-│ 1. Query/Mutation executed         │
-│ 2. Data persisted/retrieved        │
-│ 3. Constraints validated           │
-│ 4. Transaction committed           │
-└──────────────┬──────────────────────┘
-               │ Result Set
-               ▼
-        RESPONSE Path (Same route)
-```
+![flujo datos.png](image/flujo%20datos.png)
 
 ---
 
-## 🌍 Flujo Completo: Frontend → Backend → n8n → Database
+##  Flujo Completo: Frontend → Backend → n8n → Database
 
 ### Caso de Uso: Enviar Mensaje de Chat
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│              FLUJO COMPLETO DE MENSAJE DE CHAT                     │
-└────────────────────────────────────────────────────────────────────┘
-
-STEP 1: Frontend (React)
-┌──────────────────────────────────────────────────┐
-│ User types message in ChatWindow component       │
-│ Click "Send" button                              │
-│ ChatService.sendMessage(sessionId, "mensaje")    │
-│ Fetch POST /api/chat/message                     │
-│ Header: Authorization: Bearer <JWT_TOKEN>        │
-│ Body: { chatInput: "mensaje" }                   │
-└──────────────────────┬───────────────────────────┘
-                       │ HTTP POST
-                       ▼
-STEP 2: Network
-┌──────────────────────────────────────────────────┐
-│ CORS Check (origins: "*")                        │
-│ Route to Spring Boot server (localhost:8080)     │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 3: Spring Boot - Security Filter
-┌──────────────────────────────────────────────────┐
-│ JwtAuthenticationFilter.doFilterInternal()       │
-│ 1. Extract header: "Authorization: Bearer X"    │
-│ 2. Extract token from header (substring(7))     │
-│ 3. Call jwtService.extractUsername(token)       │
-│ 4. Load UserDetails from database               │
-│ 5. Verify token validity with jwtService        │
-│ 6. Set SecurityContext with authenticated user  │
-│ 7. Allow request to proceed                     │
-└──────────────────────────────────────────────────┘
-                       │ Authenticated
-                       ▼
-STEP 4: Spring Boot - Controller
-┌──────────────────────────────────────────────────┐
-│ ChatController.sendMessage()                     │
-│ @PostMapping("/message")                         │
-│ @RequestParam sessionId                          │
-│ @RequestBody ChatMessageRequest                  │
-│ Authentication authentication = principal        │
-│ Get user: (User) authentication.getPrincipal()  │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 5: Spring Boot - Service Business Logic
-┌──────────────────────────────────────────────────┐
-│ ChatService.sendMessageToN8n(sessionId, input)   │
-│                                                  │
-│ a) Find ChatSession:                             │
-│    session = chatSessionRepository               │
-│      .findBySessionId(sessionId)                 │
-│                                                  │
-│ b) Save USER message to DB:                      │
-│    userMessage = new ChatMessage(                │
-│      session, "USER", chatInput)                 │
-│    chatMessageRepository.save(userMessage)       │
-│                                                  │
-│ c) Update session timestamp:                     │
-│    session.setFechaUltimaInteraccion(now)       │
-│    chatSessionRepository.save(session)           │
-│                                                  │
-│ d) Build n8n webhook body:                       │
-│    {sessionId: session.n8nSessionId,             │
-│     action: "sendMessage",                       │
-│     chatInput: input}                            │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 6: Spring Boot - n8n Integration
-┌──────────────────────────────────────────────────┐
-│ restTemplate.postForObject(                      │
-│   N8N_WEBHOOK_URL,                               │
-│   body,                                          │
-│   String.class                                   │
-│ )                                                │
-│                                                  │
-│ HTTP POST to:                                    │
-│ https://tu-instancia-n8n.com/webhook/alphabrein │
-│                                                  │
-│ n8n receives:                                    │
-│ {                                                │
-│   sessionId: "uuid-n8n",                         │
-│   action: "sendMessage",                         │
-│   chatInput: "mi mensaje aquí"                   │
-│ }                                                │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼ (External Process)
-STEP 7: n8n Platform
-┌──────────────────────────────────────────────────┐
-│ 1. Webhook receives request                      │
-│ 2. Workflow triggered                            │
-│ 3. Process message:                              │
-│    - RAG (Retrieve knowledge base)               │
-│    - LLM (Generate response)                     │
-│    - Format output                               │
-│ 4. Send response back to Spring Boot             │
-│                                                  │
-│ Response:                                        │
-│ {                                                │
-│   output: "Respuesta jurídica especializada..."  │
-│ }                                                │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 8: Spring Boot - Save AGENT Response
-┌──────────────────────────────────────────────────┐
-│ ChatService continues:                           │
-│                                                  │
-│ String response = restTemplate                   │
-│   .postForObject(...)                            │
-│                                                  │
-│ Save AGENT message to DB:                        │
-│ agentMessage = new ChatMessage(                  │
-│   session, "AGENT", response)                    │
-│ chatMessageRepository.save(agentMessage)         │
-│                                                  │
-│ Create response DTO:                             │
-│ ChatMessageResponse {                            │
-│   sessionId,                                     │
-│   userMessage: input,                            │
-│   agentResponse: response                        │
-│ }                                                │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 9: Database - Persist Messages
-┌──────────────────────────────────────────────────┐
-│ PostgreSQL:                                      │
-│                                                  │
-│ INSERT INTO CHAT_MESSAGE                         │
-│ (SESSION_ID, SENDER, MENSAJE, FECHA_ENVIO)      │
-│ VALUES (1, 'USER', 'mi mensaje...', now())       │
-│                                                  │
-│ INSERT INTO CHAT_MESSAGE                         │
-│ (SESSION_ID, SENDER, MENSAJE, FECHA_ENVIO)      │
-│ VALUES (1, 'AGENT', '{"output":"..."}', now())   │
-│                                                  │
-│ UPDATE CHAT_SESSION                              │
-│ SET FECHA_ULTIMA_INTERACCION = now()             │
-│ WHERE SESSION_ID = '...'                         │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 10: Response Path
-┌──────────────────────────────────────────────────┐
-│ ChatController returns:                          │
-│ ResponseEntity<ChatMessageResponse>              │
-│                                                  │
-│ Body:                                            │
-│ {                                                │
-│   "sessionId": "38c2a0d1-...",                   │
-│   "message": "mi mensaje aquí",                  │
-│   "response": "Respuesta jurídica..."            │
-│ }                                                │
-│                                                  │
-│ Status: 200 OK                                   │
-│ Content-Type: application/json                   │
-└──────────────────────────────────────────────────┘
-                       │ HTTP Response
-                       ▼
-STEP 11: Frontend - Update UI
-┌──────────────────────────────────────────────────┐
-│ ChatService.sendMessage() returns:               │
-│ {                                                │
-│   userMessage: "mi mensaje aquí",                │
-│   aiResponse: "Respuesta jurídica..."            │
-│ }                                                │
-│                                                  │
-│ ChatWindow component:                            │
-│ 1. Add user message to messages array            │
-│ 2. Add AI response to messages array             │
-│ 3. Scroll to bottom                              │
-│ 4. Clear input field                             │
-│ 5. Re-render conversation                        │
-│ 6. Update last activity timestamp                │
-└──────────────────────────────────────────────────┘
-                       │
-                       ▼
-STEP 12: User sees response
-┌──────────────────────────────────────────────────┐
-│ ChatWindow displays:                             │
-│                                                  │
-│ USER (10:30):                                    │
-│ "mi mensaje aquí"                                │
-│                                                  │
-│ ALPHABREIN (10:31):                              │
-│ "Respuesta jurídica especializada..."            │
-│                                                  │
-│ User can continue typing new messages            │
-└──────────────────────────────────────────────────┘
-```
+![flujo completo chat.png](image/flujo%20completo%20chat.png)
 
 ---
 
-## 📦 Estructura de Paquetes Java
+##  Estructura de Paquetes Java
 
-```
-com.example.bcrypt2025/
-│
-├── Bcrypt2025Application.java
-│   └── Main entry point, @SpringBootApplication
-│
-├── audit/
-│   └── Auditable.java
-│       └── Base class con timestamps createdAt, updatedAt
-│
-├── config/
-│   ├── SecurityConfig.java
-│   │   └── Spring Security configuration, CORS, JWT filter
-│   ├── MailConfig.java
-│   │   └── Email configuration (Gmail SMTP)
-│   └── documentationConfig/
-│       └── SwaggerOpenApiConfig.java
-│           └── Swagger/OpenAPI documentation
-│
-├── Controller/
-│   ├── AuthController.java
-│   │   └── POST /api/auth/register, login
-│   ├── ChatController.java
-│   │   └── POST/GET /api/chat/*, session management
-│   └── UserController.java
-│       └── GET /api/users/*, user management
-│
-├── Model/
-│   ├── user/
-│   │   └── User.java (UserDetails, Auditable)
-│   │       └── idCard (PK), email, password, role
-│   ├── agent/
-│   │   ├── ChatSession.java
-│   │   │   └── id (PK), sessionId, n8nSessionId, userId (FK)
-│   │   └── ChatMessage.java
-│   │       └── id (PK), sessionId (FK), sender, mensaje
-│   └── enums/
-│       ├── Role.java (ADMIN, USER)
-│       └── IdentificationType.java (CC, CE, PP, etc.)
-│
-├── Service/
-│   ├── AuthService.java
-│   │   ├── register(RegisterRequest)
-│   │   └── login(LoginRequest)
-│   ├── UserService.java
-│   │   ├── getAllUsers(), getUserById(), getActiveUsers()
-│   │   └── getUserByEmail()
-│   ├── CustomUserDetailsService.java
-│   │   └── loadUserByUsername(email)
-│   └── agent/
-│       └── ChatService.java
-│           ├── getOrCreateSession(user)
-│           ├── sendMessageToN8n(sessionId, input)
-│           ├── getSessionHistory(sessionId)
-│           └── closeSession(sessionId)
-│
-├── Repository/
-│   ├── UserRepository.java (extends JpaRepository<User, Integer>)
-│   │   ├── findByEmail(String)
-│   │   ├── findByActive(Boolean)
-│   │   └── findByRole(Role)
-│   └── agent/
-│       ├── ChatSessionRepository.java
-│       │   ├── findBySessionId(String)
-│       │   ├── findByUserAndActiva(User, Boolean)
-│       │   └── findByUser(User)
-│       └── ChatMessageRepository.java
-│           └── findByChatSessionOrderByFechaEnvioAsc()
-│
-├── dto/
-│   ├── agent/
-│   │   ├── ChatMessageDto.java
-│   │   │   └── id, sender, mensaje, fechaEnvio
-│   │   ├── ChatMessageRequest.java
-│   │   │   └── chatInput (String)
-│   │   ├── ChatMessageResponse.java
-│   │   │   └── sessionId, message, response
-│   │   └── ChatSessionDetailDto.java
-│   │       └── id, sessionId, titulo, dates, messages
-│   ├── authDTO/
-│   │   ├── LoginRequest.java
-│   │   │   └── email, password
-│   │   ├── AuthResponse.java
-│   │   │   └── token, email, firstName, role, message
-│   │   └── (others)
-│   └── userDTO/
-│       ├── RegisterRequest.java
-│       ├── UpdateUserRequest.java
-│       └── UserResponse.java
-│
-└── jwt/
-    ├── JwtService.java
-    │   ├── generateToken(UserDetails)
-    │   ├── extractUsername(token)
-    │   ├── isTokenValid(token, userDetails)
-    │   └── extractClaim(token)
-    └── JwtAuthenticationFilter.java
-        └── doFilterInternal(request, response, chain)
-```
-
+![estructura de paquetes.png](image/estructura%20de%20paquetes
 ---
 
-## 🔐 Ciclo de Vida de una Conversación
+##  Ciclo de Vida de una Conversación
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -576,7 +165,7 @@ com.example.bcrypt2025/
 
 ---
 
-## 🔀 Patrones de Diseño Implementados
+##  Patrones de Diseño Implementados
 
 ### 1. **MVC (Model-View-Controller)**
 - **View**: Components React
@@ -615,7 +204,7 @@ com.example.bcrypt2025/
 
 ---
 
-## 🔗 Interacciones Entre Capas
+##  Interacciones Entre Capas
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -676,7 +265,7 @@ com.example.bcrypt2025/
 
 ---
 
-## 🏢 Componentes Principales
+##  Componentes Principales
 
 ### 1. **User (Entity)**
 - Implementa `UserDetails` para Spring Security
@@ -715,7 +304,7 @@ com.example.bcrypt2025/
 
 ---
 
-## 📊 Diagrama de Secuencia - Login User
+##  Diagrama de Secuencia - Login User
 
 ```
 User                Frontend              Backend               Database
@@ -752,7 +341,7 @@ User                Frontend              Backend               Database
 
 ---
 
-## 📈 Escalabilidad y Consideraciones
+##  Escalabilidad y Consideraciones
 
 ### Horizontal Scaling (Múltiples Instancias Backend)
 ```
@@ -774,7 +363,7 @@ Load Balancer
 
 ---
 
-## 🔍 Tecnologías de Soporte
+##  Tecnologías de Soporte
 
 | Herramienta | Propósito | Configuración |
 |-----------|----------|---------------|
@@ -787,7 +376,7 @@ Load Balancer
 
 ---
 
-## 🚀 Deployment Considerations
+##  Deployment Considerations
 
 - **Containerization**: Dockerfile incluido para Docker
 - **Environment Variables**: Injected en application.properties
