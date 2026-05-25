@@ -11,7 +11,7 @@ AlphaBrein utiliza **PostgreSQL** como base de datos relacional, hosteada en **N
 
 ---
 
-## 🗄️ Esquema ER (Entity-Relationship)
+##  Esquema ER (Entity-Relationship)
 
 ```mermaid
 erDiagram
@@ -60,7 +60,7 @@ erDiagram
 
 ---
 
-## 📋 Tablas
+##  Tablas
 
 ### 1. USUARIO (User)
 
