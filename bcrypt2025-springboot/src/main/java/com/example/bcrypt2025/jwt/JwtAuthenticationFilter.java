@@ -1,6 +1,7 @@
 package com.example.bcrypt2025.jwt;
 
 
+import com.example.bcrypt2025.jwt.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
