@@ -7,6 +7,8 @@ import com.example.bcrypt2025.user.DTO.UserResponse;
 import com.example.bcrypt2025.user.model.User;
 import com.example.bcrypt2025.user.enums.Role;
 import com.example.bcrypt2025.user.repository.UserRepository;
+import com.example.bcrypt2025.user.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,12 +18,12 @@ import java.util.stream.Collectors;
 
 @Service
 
-public class UserService {
+public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -41,6 +43,7 @@ public class UserService {
     }
 
     // Obtener usuario por email
+
     public UserResponse getUserByEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
