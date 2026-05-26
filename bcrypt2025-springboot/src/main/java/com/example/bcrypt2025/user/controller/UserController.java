@@ -37,4 +37,6 @@ public interface UserController {
 
 
     ResponseEntity<UserResponse> activateUser(@PathVariable Integer idCard);
+
+
 }

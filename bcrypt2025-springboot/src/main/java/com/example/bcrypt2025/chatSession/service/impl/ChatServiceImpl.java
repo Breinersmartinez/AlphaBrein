@@ -5,6 +5,7 @@ import com.example.bcrypt2025.chatMessage.DTO.ChatMessageDto;
 import com.example.bcrypt2025.chatSession.DTO.ChatSessionDetailDto;
 import com.example.bcrypt2025.chatMessage.model.ChatMessage;
 import com.example.bcrypt2025.chatSession.model.ChatSession;
+import com.example.bcrypt2025.chatSession.service.ChatService;
 import com.example.bcrypt2025.user.model.User;
 import com.example.bcrypt2025.chatMessage.repository.ChatMessageRepository;
 import com.example.bcrypt2025.chatSession.repository.ChatSessionRepository;
@@ -19,7 +20,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-public class ChatService {
+public class ChatServiceImpl implements ChatService {
 
     @Value("${n8n.webhook.url}")
     private  String N8N_WEBHOOK;
@@ -30,9 +31,9 @@ public class ChatService {
     private final RestTemplate restTemplate;
 
 
-    public ChatService(ChatSessionRepository chatSessionRepository,
-                       ChatMessageRepository chatMessageRepository,
-                       RestTemplate restTemplate) {
+    public ChatServiceImpl(ChatSessionRepository chatSessionRepository,
+                           ChatMessageRepository chatMessageRepository,
+                           RestTemplate restTemplate) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.restTemplate = restTemplate;
