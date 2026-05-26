@@ -4,10 +4,11 @@ package com.example.bcrypt2025.chatSession.controller.impl;
 import com.example.bcrypt2025.chatMessage.DTO.ChatMessageRequest;
 import com.example.bcrypt2025.chatMessage.DTO.ChatMessageResponse;
 import com.example.bcrypt2025.chatSession.DTO.ChatSessionDetailDto;
+import com.example.bcrypt2025.chatSession.controller.ChatController;
 import com.example.bcrypt2025.chatSession.model.ChatSession;
+import com.example.bcrypt2025.chatSession.service.impl.ChatServiceImpl;
 import com.example.bcrypt2025.user.model.User;
 
-import com.example.bcrypt2025.chatSession.service.impl.ChatService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -19,19 +20,19 @@ import java.util.List;
 @RestController
 @CrossOrigin(origins = "*")
 @RequestMapping("/api/chat")
-public class ChatController {
+public class ChatControllerImpl implements ChatController {
 
-    private final ChatService chatService;
+    private final ChatServiceImpl chatServiceImpl;
 
-    public ChatController(ChatService chatService) {
-        this.chatService = chatService;
+    public ChatControllerImpl(ChatServiceImpl chatServiceImpl) {
+        this.chatServiceImpl = chatServiceImpl;
     }
 
     // Obtener o crear sesión
     @PostMapping("/session")
     public ResponseEntity<ChatSession> getSession(Authentication authentication) {
         User user = (User) authentication.getPrincipal();
-        ChatSession session = chatService.getOrCreateSession(user);
+        ChatSession session = chatServiceImpl.getOrCreateSession(user);
         return ResponseEntity.ok(session);
     }
 
@@ -45,7 +46,7 @@ public class ChatController {
         try {
             User user = (User) authentication.getPrincipal();
 
-            String response = chatService.sendMessageToN8n(
+            String response = chatServiceImpl.sendMessageToN8n(
                     sessionId,
                     request.getChatInput()
             );
@@ -71,7 +72,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User user = (User) authentication.getPrincipal();
-            ChatSessionDetailDto history = chatService.getSessionHistory(sessionId, user);
+            ChatSessionDetailDto history = chatServiceImpl.getSessionHistory(sessionId, user);
             return ResponseEntity.ok(history);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().build();
@@ -83,7 +84,7 @@ public class ChatController {
     public ResponseEntity<List<ChatSession>> getUserSessions(Authentication authentication) {
         try {
             User user = (User) authentication.getPrincipal();
-            List<ChatSession> sessions = chatService.getUserSessions(user);
+            List<ChatSession> sessions = chatServiceImpl.getUserSessions(user);
             return ResponseEntity.ok(sessions);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
@@ -99,7 +100,7 @@ public class ChatController {
         try {
             User user = (User) authentication.getPrincipal();
 
-            chatService.closeSession(sessionId, user);
+            chatServiceImpl.closeSession(sessionId, user);
 
             return ResponseEntity.ok().build();
 

@@ -3,6 +3,7 @@ package com.example.bcrypt2025.auth.service.impl;
 
 import com.example.bcrypt2025.auth.DTO.AuthResponse;
 import com.example.bcrypt2025.auth.DTO.LoginRequest;
+import com.example.bcrypt2025.auth.service.AuthService;
 import com.example.bcrypt2025.user.DTO.RegisterRequest;
 import com.example.bcrypt2025.jwt.service.JwtService;
 
@@ -23,7 +24,7 @@ import java.time.LocalDateTime;
 
 @Service
 
-public class AuthService {
+public class AuthServiceImpl implements AuthService {
 
     @Value("${spring.mail.username}")
     private String mail;
@@ -36,7 +37,7 @@ public class AuthService {
     private final JavaMailSender mailSender;
     private SimpleMailMessage templateMessage;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager, JavaMailSender mailSender, SimpleMailMessage templateMessage) {
+    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager, JavaMailSender mailSender, SimpleMailMessage templateMessage) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
