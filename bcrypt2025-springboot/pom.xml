@@ -108,6 +108,16 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Prometheus Monitoring -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
 		<!--	Dependencia de mercado pago -->
 		<dependency>
 			<groupId>com.mercadopago</groupId>

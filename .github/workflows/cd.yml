@@ -1,0 +1,343 @@
+name: CD Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        type: choice
+        options:
+          - staging
+          - production
+        required: true
+      version:
+        description: 'Version tag (optional, auto-generated if empty)'
+        type: string
+        required: false
+      rollback:
+        description: 'Rollback to previous version'
+        type: boolean
+        required: false
+        default: false
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      version:
+        required: false
+        type: string
+      rollback:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      KUBECONFIG_STAGING:
+        required: true
+      KUBECONFIG_PRODUCTION:
+        required: true
+      DOCKER_REGISTRY_TOKEN:
+        required: true
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  KUBERNETES_VERSION: '1.28'
+
+permissions:
+  contents: read
+  packages: read
+  deployments: write
+  statuses: write
+
+jobs:
+  
+  # PRE-DEPLOY VALIDATION
+  
+  pre-deploy:
+    name: Pre-Deploy Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      environment: ${{ steps.env.outputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev-$(date +%Y%m%d%H%M%S)")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Set environment
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Validate environment
+        run: |
+          if [[ "${{ steps.env.outputs.environment }}" != "staging" && "${{ steps.env.outputs.environment }}" != "production" ]]; then
+            echo "::error::Invalid environment: ${{ steps.env.outputs.environment }}"
+            exit 1
+          fi
+
+      - name: Verify images exist
+        run: |
+          IMAGES=(
+            "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ steps.version.outputs.version }}"
+            "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ steps.version.outputs.version }}"
+          )
+          for img in "${IMAGES[@]}"; do
+            if ! docker manifest inspect "$img" > /dev/null 2>&1; then
+              echo "::error::Image not found: $img"
+              exit 1
+            fi
+          done
+          echo "All images verified"
+
+  
+  # STAGING DEPLOYMENT
+  
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: pre-deploy
+    if: needs.pre-deploy.outputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.alphabrein.example.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG_STAGING }}
+
+      - name: Update image tags in kustomization
+        run: |
+          cd k8s/overlays/staging
+          kustomize edit set image \
+            backend=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.pre-deploy.outputs.version }} \
+            frontend=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.pre-deploy.outputs.version }}
+
+      - name: Deploy to staging
+        run: |
+          cd k8s/overlays/staging
+          kustomize build . | kubectl apply -f -
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/alphabrein-backend -n alphabrein-staging --timeout=300s
+          kubectl rollout status deployment/alphabrein-frontend -n alphabrein-staging --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          sleep 30
+          curl -sf https://staging.alphabrein.example.com/health || exit 1
+          curl -sf https://staging.alphabrein.example.com/api/actuator/health || exit 1
+
+      - name: Notify deployment
+        uses: slackapi/slack-github-action@v1.24.0
+        if: always()
+        with:
+          payload: |
+            {
+              "text": "Deployment to Staging ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*AlphaBrein Staging Deployment*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Version:*\n${{ needs.pre-deploy.outputs.version }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
+                    {"type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}"},
+                    {"type": "mrkdwn", "text": "*Commit:*\n${{ github.sha }}"}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  
+  # PRODUCTION DEPLOYMENT
+  
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: pre-deploy
+    if: needs.pre-deploy.outputs.environment == 'production'
+    environment:
+      name: production
+      url: https://alphabrein.example.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG_PRODUCTION }}
+
+      - name: Blue-Green Deploy - Prepare Green
+        run: |
+          cd k8s/overlays/production
+          kustomize edit set image \
+            backend=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.pre-deploy.outputs.version }} \
+            frontend=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.pre-deploy.outputs.version }}
+          kustomize build . | kubectl apply -f -
+
+      - name: Wait for Green rollout
+        run: |
+          kubectl rollout status deployment/alphabrein-backend-green -n alphabrein-prod --timeout=300s
+          kubectl rollout status deployment/alphabrein-frontend-green -n alphabrein-prod --timeout=300s
+
+      - name: Run production smoke tests on Green
+        run: |
+          sleep 30
+          GREEN_IP=$(kubectl get svc alphabrein-green -n alphabrein-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          curl -sf http://$GREEN_IP/health || exit 1
+          curl -sf http://$GREEN_IP/api/actuator/health || exit 1
+
+      - name: Switch traffic to Green
+        run: |
+          kubectl patch svc alphabrein -n alphabrein-prod -p '{"spec":{"selector":{"version":"green"}}}'
+
+      - name: Verify traffic switch
+        run: |
+          sleep 10
+          curl -sf https://alphabrein.example.com/health || exit 1
+          curl -sf https://alphabrein.example.com/api/actuator/health || exit 1
+
+      - name: Scale down Blue (previous version)
+        run: |
+          kubectl scale deployment alphabrein-backend-blue -n alphabrein-prod --replicas=0
+          kubectl scale deployment alphabrein-frontend-blue -n alphabrein-prod --replicas=0
+
+      - name: Notify deployment
+        uses: slackapi/slack-github-action@v1.24.0
+        if: always()
+        with:
+          payload: |
+            {
+              "text": "Deployment to Production ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*AlphaBrein Production Deployment*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Version:*\n${{ needs.pre-deploy.outputs.version }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
+                    {"type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}"},
+                    {"type": "mrkdwn", "text": "*Commit:*\n${{ github.sha }}"}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  
+  # ROLLBACK
+  
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: pre-deploy
+    if: github.event.inputs.rollback == 'true'
+    environment:
+      name: ${{ needs.pre-deploy.outputs.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ needs.pre-deploy.outputs.environment == 'production' && secrets.KUBECONFIG_PRODUCTION || secrets.KUBECONFIG_STAGING }}
+
+      - name: Rollback to previous revision
+        run: |
+          NAMESPACE="alphabrein-${{ needs.pre-deploy.outputs.environment }}"
+          kubectl rollout undo deployment/alphabrein-backend -n $NAMESPACE
+          kubectl rollout undo deployment/alphabrein-frontend -n $NAMESPACE
+          kubectl rollout status deployment/alphabrein-backend -n $NAMESPACE --timeout=300s
+          kubectl rollout status deployment/alphabrein-frontend -n $NAMESPACE --timeout=300s
+
+      - name: Notify rollback
+        uses: slackapi/slack-github-action@v1.24.0
+        if: always()
+        with:
+          payload: |
+            {
+              "text": "Rollback ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*AlphaBrein Rollback*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Environment:*\n${{ needs.pre-deploy.outputs.environment }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
+                    {"type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}"}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  
+  # POST-DEPLOY VALIDATION
+  
+  post-deploy:
+    name: Post-Deploy Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [deploy-staging, deploy-production, rollback]
+    if: always()
+
+    steps:
+      - name: Generate deployment report
+        run: |
+          echo "## Deployment Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | Status | Version |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging | ${{ needs.deploy-staging.result }} | ${{ needs.pre-deploy.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production | ${{ needs.deploy-production.result }} | ${{ needs.pre-deploy.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rollback | ${{ needs.rollback.result }} | N/A |" >> $GITHUB_STEP_SUMMARY
