@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alphabrein-postgres
+    environment:
+      POSTGRES_DB: alphabrein
+      POSTGRES_USER: alphabrein
+      POSTGRES_PASSWORD: alphabrein
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alphabrein -d alphabrein"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alphabrein-network
+
+  backend:
+    build:
+      context: ./bcrypt2025-springboot
+      dockerfile: Dockerfile
+    container_name: alphabrein-backend
+    environment:
+      URL_DB: jdbc:postgresql://postgres:5432/alphabrein
+      USER_NAME: alphabrein
+      PASSWORD_DB: alphabrein
+      TOKEN_JWT: ${TOKEN_JWT:-your-super-secret-jwt-key-change-in-production}
+      USER_NAME_MAIL: ${USER_NAME_MAIL:-}
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      ACCESS_TOKEN: ${ACCESS_TOKEN:-}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - alphabrein-network
+
+  frontend:
+    build:
+      context: ./bcrypt2025-front-end
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://backend:8080
+    container_name: alphabrein-frontend
+    environment:
+      VITE_API_URL: http://backend:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - alphabrein-network
+
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: alphabrein-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - alphabrein-network
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: alphabrein-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - alphabrein-network
+
+  graphite:
+    image: graphiteapp/graphite-statsd:1.1.10-3
+    container_name: alphabrein-graphite
+    environment:
+      GRAPHITE_WEB_GUNICORN_WORKERS: '2'
+    volumes:
+      - ./monitoring/graphite/storage-schemas.conf:/opt/graphite/conf/storage-schemas.conf:ro
+      - graphite_data:/opt/graphite/storage/whisper
+    ports:
+      - "8081:8081"
+      - "2003:2003"
+      - "2004:2004"
+      - "8125:8125/udp"
+      - "8126:8126"
+    restart: unless-stopped
+    networks:
+      - alphabrein-network
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  graphite_data:
+
+networks:
+  alphabrein-network:
+    name: alphabrein-network
