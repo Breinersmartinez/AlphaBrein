@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './context/AuthContext';
+import HomePage from './components/HomePage';
 import Login from './components/Login';
 import ClientSignUp from './components/ClientSignUp';
 import Dashboard from './components/Dashboard';
@@ -7,7 +8,7 @@ import UserDashboard from './components/UserDashboard'; // Importa tu componente
 
 const App = () => {
   const { isLoading, isAuthenticated, user } = useAuth();
-  const [currentPage, setCurrentPage] = useState('login');
+  const [currentPage, setCurrentPage] = useState('home');
 
   const navigateTo = (page) => {
     setCurrentPage(page);
@@ -34,8 +35,10 @@ const App = () => {
     }
   }
 
-  // Si no está autenticado, mostrar Login o SignUp
+  // Si no está autenticado, mostrar Home, Login o SignUp
   switch (currentPage) {
+    case 'home':
+      return <HomePage navigateTo={navigateTo} />;
     case 'login':
       return <Login navigateTo={navigateTo} />;
     case 'clientSignUp':
@@ -45,7 +48,7 @@ const App = () => {
     case 'userDashboard':
       return <UserDashboard navigateTo={navigateTo} />;
     default:
-      return <Login navigateTo={navigateTo} />;
+      return <HomePage navigateTo={navigateTo} />;
   }
 };
 
