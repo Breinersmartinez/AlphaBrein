@@ -1,0 +1,125 @@
+version: 2
+updates:
+  # Backend - Maven dependencies
+  - package-ecosystem: "maven"
+    directory: "/bcrypt2025-springboot"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "backend"
+      - "maven"
+    groups:
+      spring-boot:
+        patterns:
+          - "org.springframework.boot*"
+        update-types:
+          - "minor"
+          - "patch"
+      security:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+    commit-message:
+      prefix: "chore(deps-maven)"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      - dependency-name: "org.projectlombok:lombok"
+        versions: ["1.18.30", "1.18.32"]  # Known issues with newer versions
+
+  # Frontend - NPM dependencies
+  - package-ecosystem: "npm"
+    directory: "/bcrypt2025-front-end"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 15
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "npm"
+    groups:
+      react-ecosystem:
+        patterns:
+          - "react*"
+          - "@types/react*"
+        update-types:
+          - "minor"
+          - "patch"
+      dev-tools:
+        patterns:
+          - "vite*"
+          - "eslint*"
+          - "tailwind*"
+          - "postcss*"
+        update-types:
+          - "minor"
+          - "patch"
+      security:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+    commit-message:
+      prefix: "chore(deps-npm)"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      - dependency-name: "react"
+        versions: ["19.0.0", "19.1.0"]  # Wait for stable
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps-github-actions)"
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/bcrypt2025-springboot"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps-docker-backend)"
+
+  - package-ecosystem: "docker"
+    directory: "/bcrypt2025-front-end"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+      - "frontend"
+    commit-message:
+      prefix: "chore(deps-docker-frontend)"

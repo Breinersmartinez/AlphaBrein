@@ -1,0 +1,521 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  MAVEN_VERSION: '3.9'
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  # ===========================================
+  # BACKEND - Build, Test, Security
+  # ===========================================
+  backend-build:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./bcrypt2025-springboot
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'maven'
+          cache-dependency-path: bcrypt2025-springboot/pom.xml
+
+      - name: Setup Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: ${{ env.MAVEN_VERSION }}
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            bcrypt2025-springboot/target
+          key: ${{ runner.os }}-maven-${{ hashFiles('bcrypt2025-springboot/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Validate Maven wrapper
+        run: ./mvnw validate --batch-mode
+
+      - name: Compile backend
+        run: ./mvnw compile --batch-mode -DskipTests
+
+      - name: Run backend tests
+        run: ./mvnw test --batch-mode
+        env:
+          URL_DB: jdbc:postgresql://localhost:5432/alphabrein_test
+          USER_NAME: test
+          PASSWORD_DB: test
+          TOKEN_JWT: ${{ secrets.CI_JWT_SECRET }}
+          N8N_WEBHOOK_URL: http://localhost:5678/webhook/test
+
+      - name: Generate test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Backend Tests
+          path: bcrypt2025-springboot/target/surefire-reports/*.xml
+          reporter: java-junit
+
+      - name: Run SpotBugs (Static Analysis)
+        run: ./mvnw spotbugs:check --batch-mode
+        continue-on-error: true
+
+      - name: Run Checkstyle
+        run: ./mvnw checkstyle:check --batch-mode
+        continue-on-error: true
+
+      - name: Upload backend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            bcrypt2025-springboot/target/*.jar
+            bcrypt2025-springboot/target/site/
+          retention-days: 7
+
+  backend-security:
+    name: Backend Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ./bcrypt2025-springboot
+    needs: backend-build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'maven'
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'AlphaBrein Backend'
+          path: '.'
+          format: 'HTML,JSON,SARIF'
+          out: 'reports'
+          args: >
+            --failOnCVSS 7
+            --suppression ./suppression.xml
+        continue-on-error: true
+
+      - name: Upload Dependency Check results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          category: dependency-check
+          sarif_file: bcrypt2025-springboot/reports/dependency-check-report.sarif
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java
+          config-file: .github/codeql-config.yml
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:java"
+
+  # ===========================================
+  # FRONTEND - Build, Test, Lint, Security
+  # ===========================================
+  frontend-build:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ./bcrypt2025-front-end
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: bcrypt2025-front-end/package-lock.json
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            bcrypt2025-front-end/node_modules
+            bcrypt2025-front-end/.vite
+          key: ${{ runner.os }}-node-${{ hashFiles('bcrypt2025-front-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+      - name: Run TypeScript type check
+        run: npx tsc --noEmit --skipLibCheck
+        continue-on-error: true
+
+      - name: Run unit tests
+        run: npm test --if-present -- --run --reporter=junit --outputFile=test-results.xml
+        continue-on-error: true
+
+      - name: Upload frontend test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Frontend Tests
+          path: bcrypt2025-front-end/test-results.xml
+          reporter: jest-junit
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:8080
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: |
+            bcrypt2025-front-end/dist/
+          retention-days: 7
+
+  frontend-security:
+    name: Frontend Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ./bcrypt2025-front-end
+    needs: frontend-build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high --json > npm-audit.json || true
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-report
+          path: bcrypt2025-front-end/npm-audit.json
+          retention-days: 7
+
+      - name: Run Snyk Security Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
+          args: --severity-threshold=high --sarif-file-output=snyk.sarif
+
+      - name: Upload Snyk results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          category: snyk
+          sarif_file: bcrypt2025-front-end/snyk.sarif
+
+  # ===========================================
+  # DOCKER - Build & Test Images
+  # ===========================================
+  docker-build:
+    name: Docker Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend-build, frontend-build]
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./bcrypt2025-springboot
+          file: ./bcrypt2025-springboot/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./bcrypt2025-front-end
+          file: ./bcrypt2025-front-end/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Run Trivy vulnerability scanner (Backend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/backend:${{ steps.meta-backend.outputs.tags }}
+          format: 'sarif'
+          output: 'trivy-backend.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Upload Trivy results (Backend)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          category: trivy-backend
+          sarif_file: trivy-backend.sarif
+
+      - name: Run Trivy vulnerability scanner (Frontend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/frontend:${{ steps.meta-frontend.outputs.tags }}
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Upload Trivy results (Frontend)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          category: trivy-frontend
+          sarif_file: trivy-frontend.sarif
+
+  # ===========================================
+  # INTEGRATION TESTS
+  # ===========================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [docker-build]
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: alphabrein
+          POSTGRES_USER: alphabrein
+          POSTGRES_PASSWORD: alphabrein
+        ports: 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alphabrein -d alphabrein"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build docker-compose
+        run: docker compose -f docker-compose.yml build
+
+      - name: Start services
+        run: docker compose -f docker-compose.yml up -d
+
+      - name: Wait for services health
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null; then
+              echo "Backend is healthy"
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Run API smoke tests
+        run: |
+          # Test auth endpoints
+          curl -sf -X POST http://localhost:8080/api/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"firstName":"Test","lastName":"User","idCard":999999999,"identificationType":"CC","email":"test@example.com","password":"TestPass123!","phoneNumber":"+573001112233","direction":"Test","role":"USER"}' | jq -e '.token'
+
+          # Test login
+          TOKEN=$(curl -sf -X POST http://localhost:8080/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@example.com","password":"TestPass123!"}' | jq -r '.token')
+
+          # Test chat session
+          curl -sf -X POST http://localhost:8080/api/chat/session \
+            -H "Authorization: Bearer $TOKEN" | jq -e '.sessionId'
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs --no-color > integration-logs.txt
+
+      - name: Upload integration logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-test-logs
+          path: integration-logs.txt
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
+
+  # ===========================================
+  # DEPENDENCY REVIEW
+  # ===========================================
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Review dependencies
+        uses: actions/dependency-review-action@v4
+        with:
+          config-file: '.github/dependency-review-config.yml'
+          fail-on-severity: high
+
+  # ===========================================
+  # SUMMARY & STATUS
+  # ===========================================
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [backend-build, backend-security, frontend-build, frontend-security, docker-build, integration-tests, dependency-review]
+    if: always()
+
+    steps:
+      - name: Check job statuses
+        run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Build | ${{ needs.backend-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Security | ${{ needs.backend-security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Security | ${{ needs.frontend-security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Review | ${{ needs.dependency-review.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if any job failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error::One or more CI jobs failed"
+          exit 1

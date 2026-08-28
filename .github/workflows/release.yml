@@ -1,0 +1,351 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.2.3)'
+        type: string
+        required: true
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ===========================================
+  # VALIDATE RELEASE
+  # ===========================================
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ steps.version.outputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "::error::Invalid version format. Expected: vX.Y.Z or vX.Y.Z-suffix"
+            exit 1
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        uses: metcalfc/changelog-generator@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          previous-tag: latest
+          current-tag: ${{ steps.version.outputs.version }}
+
+      - name: Check for breaking changes
+        run: |
+          if grep -q "BREAKING CHANGE" <<< "${{ steps.changelog.outputs.changelog }}"; then
+            echo "⚠️ Breaking changes detected in this release"
+          fi
+
+  # ===========================================
+  # BUILD RELEASE ARTIFACTS
+  # ===========================================
+  build-release:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validate-release
+    strategy:
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }}
+        if: matrix.component == 'backend'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'maven'
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        if: matrix.component == 'frontend'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Build Backend
+        if: matrix.component == 'backend'
+        run: |
+          cd bcrypt2025-springboot
+          ./mvnw clean package -DskipTests -Drevision=${{ needs.validate-release.outputs.version }}
+        env:
+          URL_DB: jdbc:postgresql://localhost:5432/alphabrein
+          TOKEN_JWT: ${{ secrets.CI_JWT_SECRET }}
+
+      - name: Build Frontend
+        if: matrix.component == 'frontend'
+        run: |
+          cd bcrypt2025-front-end
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: https://api.alphabrein.example.com
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.component }}-release-${{ needs.validate-release.outputs.version }}
+          path: |
+            bcrypt2025-springboot/target/*.jar
+            bcrypt2025-front-end/dist/
+          retention-days: 30
+
+  # ===========================================
+  # DOCKER RELEASE IMAGES
+  # ===========================================
+  docker-release:
+    name: Build & Push Release Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [validate-release, build-release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./bcrypt2025-springboot
+          file: ./bcrypt2025-springboot/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          sbom: true
+          provenance: true
+
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./bcrypt2025-front-end
+          file: ./bcrypt2025-front-end/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          sbom: true
+          provenance: true
+
+      - name: Sign images with Cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign Backend image
+        run: |
+          cosign sign --yes ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.validate-release.outputs.version }}
+        env:
+          COSIGN_EXPERIMENTAL: 1
+
+      - name: Sign Frontend image
+        run: |
+          cosign sign --yes ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.validate-release.outputs.version }}
+        env:
+          COSIGN_EXPERIMENTAL: 1
+
+  # ===========================================
+  # SBOM GENERATION
+  # ===========================================
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate-release, build-release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM for Backend
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./bcrypt2025-springboot
+          format: spdx-json
+          output-file: sbom-backend.spdx.json
+
+      - name: Generate SBOM for Frontend
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./bcrypt2025-front-end
+          format: spdx-json
+          output-file: sbom-frontend.spdx.json
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ needs.validate-release.outputs.version }}
+          path: |
+            sbom-backend.spdx.json
+            sbom-frontend.spdx.json
+          retention-days: 90
+
+      - name: Attach SBOM to release
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'push'
+        with:
+          tag_name: ${{ needs.validate-release.outputs.version }}
+          files: |
+            sbom-backend.spdx.json
+            sbom-frontend.spdx.json
+
+  # ===========================================
+  # CREATE GITHUB RELEASE
+  # ===========================================
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate-release, build-release, docker-release, generate-sbom]
+    steps:
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate-release.outputs.version }}
+          name: "AlphaBrein ${{ needs.validate-release.outputs.version }}"
+          body: |
+            ## Changes
+            ${{ needs.validate-release.outputs.changelog }}
+
+            ## Docker Images
+            \`\`\`bash
+            # Backend
+            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.validate-release.outputs.version }}
+
+            # Frontend
+            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.validate-release.outputs.version }}
+            \`\`\`
+
+            ## Verification
+            Images are signed with Cosign. Verify with:
+            \`\`\`bash
+            cosign verify ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.validate-release.outputs.version }}
+            \`\`\`
+
+            ## SBOM
+            Software Bill of Materials attached as artifacts.
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: false
+          files: |
+            bcrypt2025-springboot/target/*.jar
+            sbom-backend.spdx.json
+            sbom-frontend.spdx.json
+
+  # ===========================================
+  # NOTIFY RELEASE
+  # ===========================================
+  notify-release:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: create-release
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "AlphaBrein Release ${{ needs.create-release.result }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*AlphaBrein Release*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Version:*\n${{ needs.validate-release.outputs.version }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ needs.create-release.result }}"},
+                    {"type": "mrkdwn", "text": "*Docker Images:*\nBackend & Frontend pushed to GHCR"},
+                    {"type": "mrkdwn", "text": "*SBOM:*\nGenerated and attached"}
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "<https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate-release.outputs.version }}|View Release>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
