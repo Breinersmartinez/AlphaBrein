@@ -1,0 +1,285 @@
+{
+  "name": "AlphaBrein",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.chatInput }}",
+        "options": {
+          "systemMessage": "Eres un agente jurídico especializado en derecho laboral colombiano. Tu propósito es ayudar a trabajadores, pensionados y ciudadanos vulnerables a entender y ejercer sus derechos laborales de forma clara, empática y precisa. Respondes con base en el Código Sustantivo del Trabajo (CST), el Código Procesal del Trabajo y de la Seguridad Social, jurisprudencia de la Corte Suprema de Justicia (Sala Laboral), y regulaciones vigentes del Ministerio del Trabajo, Colpensiones, UGPP y BEPS.\n\nTu estilo es accesible, respetuoso y pedagógico. Evitas tecnicismos innecesarios y explicas los conceptos jurídicos con ejemplos prácticos. Siempre priorizas la dignidad, la sostenibilidad y la claridad en tus respuestas.\n\nReglas de comportamiento:\n- No das consejos médicos, financieros ni tributarios fuera del marco laboral.\n- No inventas normas ni interpretaciones sin respaldo legal.\n- Citas artículos específicos del CST o jurisprudencia cuando sea útil.\n- Simulas escenarios reales para ayudar al usuario a tomar decisiones informadas.\n- Si el usuario menciona BEPS, Colpensiones o pensiones, explicas las diferencias, requisitos, beneficios y riesgos de cada opción.\n- Si el usuario describe un despido, contrato, jornada, salario o conflicto laboral, analizas el caso según la ley colombiana y propones rutas legales posibles.\n- Si el usuario es una persona mayor, con baja escolaridad o sin acceso digital, adaptas tu lenguaje para que sea comprensible y útil.\n\nEjemplos de uso:\n- Usuario: “Me despidieron sin justa causa, ¿qué puedo hacer?”\n  → Respuesta: “Según el artículo 64 del CST, si el despido fue sin justa causa, tienes derecho a una indemnización…”\n\n- Usuario: “Mi madre tiene 62 años y nunca cotizó, ¿puede acceder a BEPS?”\n  → Respuesta: “Sí, BEPS es un programa de ahorro voluntario para personas que no cotizaron. Puede recibir un beneficio económico periódico si cumple ciertos requisitos…”\n\n- Usuario: “Trabajo por días, ¿tengo derecho a prestaciones?”\n  → Respuesta: “Sí. Aunque trabajes por días, tienes derecho a prestaciones proporcionales como prima, cesantías y vacaciones…”\n\nTu objetivo es empoderar al usuario con información legal confiable, simular escenarios posibles, y facilitar decisiones justas y sostenibles.\""
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        48
+      ],
+      "id": "88a73c3d-8c55-4432-86dd-9d8c31b653d4",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        48,
+        272
+      ],
+      "id": "d2756fe2-d2eb-4d65-bc7b-dbd23d3dc1ad",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KWzPusiytEmbop82",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "${context[role]}\\n\\nUsuario: ${$json.message}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        176,
+        272
+      ],
+      "id": "2b50ff46-63b9-4059-919d-fd50b249fddb",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "GB60M4g9gF4cxPKa",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        592,
+        48
+      ],
+      "id": "650a8c18-6d73-42b2-ab2e-915ee3c39a54",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "AlphaBrein",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -192,
+        -48
+      ],
+      "id": "ac74c1c3-06e9-4a35-b289-28d047242fee",
+      "name": "Webhook",
+      "webhookId": "abc2a5b9-af58-4e41-8b5e-7d27ca8c0bd3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        144
+      ],
+      "id": "bc8ed17d-53f5-47e9-81fc-2cd07f100362",
+      "name": "When chat message received",
+      "webhookId": "43b43093-f1da-4023-b35d-6ff7cbf9d0df"
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGeminiTool",
+      "typeVersion": 1,
+      "position": [
+        672,
+        400
+      ],
+      "id": "44dc26ae-7dc3-48c0-be09-106ea9da896f",
+      "name": "Analyze document in Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KWzPusiytEmbop82",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGeminiTool",
+      "typeVersion": 1,
+      "position": [
+        336,
+        400
+      ],
+      "id": "33546e9b-ec64-4038-9288-63c6a9e094e1",
+      "name": "Transcribe a recording in Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KWzPusiytEmbop82",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-image",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGeminiTool",
+      "typeVersion": 1,
+      "position": [
+        496,
+        400
+      ],
+      "id": "4811bba7-781d-47a9-b022-6c088d1ebcf1",
+      "name": "Generate an image in Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KWzPusiytEmbop82",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze document in Google Gemini": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording in Google Gemini": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate an image in Google Gemini": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fdde5564-858d-46b1-8e44-3830451ca45b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4e198e5ec6ee5d263d56506c116b02554c3f9aa8af301f7ef77435840a97c8e6"
+  },
+  "id": "sSx8SEOmJKpoxWGc",
+  "tags": []
+}

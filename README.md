@@ -1,228 +1,319 @@
 # AlphaBrein
 
-AlphaBrein es una plataforma de autenticación y chat basada en Spring Boot, MySQL y bcrypt. El proyecto está diseñado para demostrar el uso seguro de contraseñas y la gestión de sesiones de chat mediante autenticación JWT.
+AlphaBrein es una plataforma de autenticación y chat inteligente basada en Spring Boot, PostgreSQL y bcrypt. El proyecto implementa un sistema seguro de registro, inicio de sesión y mensajería de chat con integración n8n para respuestas de IA, documentación automática con Swagger, monitoreo con Prometheus/Grafana y despliegue con Docker.
 
-## Descripción
+## Características Principales
 
-Este proyecto implementa un sistema de registro, inicio de sesión y mensajería de chat con las siguientes características:
+- **Autenticación segura**: Registro/login con JWT y hashing de contraseñas BCrypt (strength=10)
+- **Chat inteligente**: Sesiones de chat persistentes con integración n8n para IA
+- **Arquitectura 3 capas**: Frontend (React 19 + Vite + Tailwind) → Backend (Spring Boot 3 + Java 17) → Base de datos (PostgreSQL)
+- **API Documentada**: Swagger/OpenAPI en `/swagger-ui.html`
+- **Monitoreo**: Prometheus + Grafana + Graphite
+- **Despliegue**: Docker Compose (dev/prod) + Makefile
+- **Emails**: Notificaciones via Gmail SMTP
+- **Pagos**: Integración Mercado Pago (SDK Java)
 
-- Registro de usuarios con cifrado de contraseñas mediante bcrypt.
-- Inicio de sesión con autenticación JWT.
-- Creación y gestión de sesiones de chat autenticadas.
-- Envío de mensajes de usuario y generación de respuestas de agente.
-- Consultas del historial de sesiones y cierre de sesiones.
+## Estructura del Repositorio
 
-## Estructura del repositorio
+```
+AlphaBrein/
+├── bcrypt2025-springboot/     # Backend Spring Boot
+│   ├── src/main/java/com/example/bcrypt2025/
+│   │   ├── auth/              # Autenticación (JWT, BCrypt, Controllers, Services)
+│   │   ├── user/              # Gestión de usuarios (Model, DTO, Repository, Service)
+│   │   ├── chatSession/       # Sesiones de chat (Model, DTO, Repository, Service, Controller)
+│   │   ├── chatMessage/       # Mensajes de chat (Model, DTO, Repository)
+│   │   ├── jwt/               # JWT Service & Filter
+│   │   ├── config/            # Security, Mail, Swagger configs
+│   │   └── audit/             # Auditable base class
+│   ├── Dockerfile
+│   └── pom.xml
+├── bcrypt2025-front-end/      # Frontend React 19 + Vite + Tailwind
+│   ├── src/
+│   │   ├── components/        # Login, SignUp, Dashboard, ChatWindow, UserDashboard
+│   │   ├── context/           # AuthContext (React Context API)
+│   │   ├── services/          # AuthService, ChatService
+│   │   └── assets/
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   └── package.json
+├── db/
+│   └── alphabrein.sql         # Schema SQL
+├── docs/                      # Documentación técnica
+│   ├── ARCHITECTURE.md        # Arquitectura 3 capas, flujos, patrones
+│   ├── API.md                 # Referencia completa de endpoints
+│   ├── AUTHENTICATION.md      # JWT, BCrypt, Spring Security
+│   ├── CHAT_SYSTEM.md         # Sistema de chat, ciclo de vida, n8n
+│   ├── DATABASE.md            # Esquema BD, queries, índices
+│   ├── INSTALLATION.md        # Guía paso a paso
+│   ├── data_dictonary.md      # Diccionario de datos
+│   └── image/                 # Diagramas de arquitectura
+├── monitoring/
+│   ├── prometheus/prometheus.yml
+│   ├── grafana/datasources/
+│   ├── grafana/dashboards/
+│   └── graphite/storage-schemas.conf
+├── n8n/
+│   └── AlphaBrein.json        # Workflow n8n export
+├── docker-compose.yml         # Desarrollo
+├── docker-compose.prod.yml    # Producción
+├── Makefile                   # Comandos Docker
+├── .env.example               # Variables de entorno ejemplo
+└── README.md
+```
 
-La raíz del proyecto contiene dos subproyectos principales:
+## Tecnologías
 
-- `bcrypt2025-springboot`: backend en Java con Spring Boot.
-- `bcrypt2025-front-end`: frontend en React.
+### Backend
+| Tecnología | Versión | Propósito |
+|------------|---------|-----------|
+| Java | 17 | Lenguaje |
+| Spring Boot | 3.4.4 | Framework |
+| Spring Security | 3.x | Autenticación/Autorización |
+| Spring Data JPA | 3.x | ORM |
+| PostgreSQL Driver | 42.x | Conexión BD |
+| JWT (jjwt) | 0.12.3 | Tokens |
+| BCrypt | Spring Security | Hashing contraseñas |
+| Swagger/OpenAPI | 2.8.6 | Documentación API |
+| Actuator + Micrometer | 3.x | Métricas Prometheus |
+| JavaMailSender | 3.x | Emails Gmail |
+| Mercado Pago SDK | 2.1.7 | Pagos |
 
-## Tecnologías principales
+### Frontend
+| Tecnología | Versión | Propósito |
+|------------|---------|-----------|
+| React | 19.1.1 | UI Library |
+| Vite | 7.1.7 | Build tool |
+| Tailwind CSS | 4.1.17 | Styling |
+| Lucide React | 0.544.0 | Iconos |
+| pdfjs-dist | 5.4.149 | PDF viewer |
+| mammoth | 1.11.0 | Word docs |
 
-- Java 17
-- Spring Boot
-- Spring Security
-- JWT
-- PostgreSQL
-- bcrypt
-- React
-- Vite
-- Tailwind CSS
+### Infraestructura
+| Herramienta | Versión | Propósito |
+|-------------|---------|-----------|
+| PostgreSQL | 16-alpine | Base de datos |
+| Docker | 20.x+ | Contenedores |
+| Prometheus | 2.54.0 | Métricas |
+| Grafana | 10.4.0 | Dashboards |
+| Graphite | 1.1.10-3 | Métricas legacy |
+| n8n | Latest | Workflow automation |
 
 ## Requisitos
 
-- Java 17 o superior
-- Maven
-- Node.js y npm o yarn
-- PostgreSQL
+- Java 17+
+- Maven 3.8+ (o usar `./mvnw`)
+- Node.js 18+ y npm 9+
+- Docker 20+ y Docker Compose (para contenedores)
+- Cuenta Neon DB (o PostgreSQL local)
+- Cuenta n8n (para IA)
+- Cuenta Gmail (para emails)
 
-## Configuración y ejecución
+## Inicio Rápido
 
-### Backend
+### Opción 1: Docker Compose (Recomendado)
 
-1. Abrir `bcrypt2025-springboot/src/main/resources/application.properties` y configurar la conexión a la base de datos MySQL.
-2. Compilar el proyecto:
+```bash
+# 1. Configurar variables de entorno
+make env-example
+# Editar .env con tus valores
 
-   ./mvnw clean package
+# 2. Levantar todo (backend, frontend, postgres)
+make up
 
-3. Ejecutar la aplicación:
+# 3. Ver logs
+make logs
 
-   ./mvnw spring-boot:run
+# Servicios disponibles:
+# - Frontend: http://localhost:5173
+# - Backend API: http://localhost:8080
+# - Swagger UI: http://localhost:8080/swagger-ui.html
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3000 (admin/admin)
+```
 
-La API estará disponible en `http://localhost:8080`.
+### Opción 2: Desarrollo Local
 
-### Frontend
+**Backend:**
+```bash
+cd bcrypt2025-springboot
+# Configurar application.properties o variables de entorno
+./mvnw spring-boot:run
+```
 
-1. Acceder a la carpeta `bcrypt2025-front-end`.
-2. Instalar dependencias:
+**Frontend:**
+```bash
+cd bcrypt2025-front-end
+npm install
+npm run dev
+```
 
-   npm install
+## Variables de Entorno
 
-3. Iniciar la aplicación:
+Copiar `.env.example` a `.env` y configurar:
 
-   npm run dev
+```properties
+# Database
+POSTGRES_DB=alphabrein
+POSTGRES_USER=alphabrein
+POSTGRES_PASSWORD=secure_password
 
-El frontend se ejecutará en el puerto configurado por Vite, típicamente `http://localhost:5173`.
+# Backend
+TOKEN_JWT=your-base64-encoded-secret-key-min-32-chars
+USER_NAME_MAIL=your-email@gmail.com
+APP_PASSWORD=your-gmail-app-password
+N8N_WEBHOOK_URL=https://your-n8n-instance/webhook/alphabrein
+ACCESS_TOKEN=mercado-libre-token
 
-## API principal
+# Frontend
+VITE_API_URL=http://localhost:8080
+
+# Monitoring
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=secure_password
+```
+
+**Generar JWT Secret:**
+```bash
+openssl rand -base64 32
+```
+
+## API Endpoints Principales
 
 ### Autenticación
-
-#### Registro de usuario
-
-POST `/api/auth/register`
-
-Request body:
-
-```json
-{
-  "firstName": "Breiner",
-  "lastName": "López",
-  "idCard": 1234567890,
-  "identificationType": "CC",
-  "email": "breiner@example.com",
-  "password": "password123",
-  "phoneNumber": "3005551234",
-  "direction": "Calle 1 #2-3"
-}
-```
-
-Respuesta esperada:
-
-```json
-{
-  "token": "...",
-  "message": "Usuario registrado exitosamente"
-}
-```
-
-#### Inicio de sesión
-
-POST `/api/auth/login`
-
-Request body:
-
-```json
-{
-  "email": "breiner@example.com",
-  "password": "password123"
-}
-```
-
-Respuesta esperada:
-
-```json
-{
-  "token": "...",
-  "message": "Login exitoso"
-}
-```
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Registrar usuario |
+| POST | `/api/auth/login` | Iniciar sesión |
 
 ### Chat
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/chat/session` | Crear/obtener sesión |
+| POST | `/api/chat/message?sessionId=` | Enviar mensaje |
+| GET | `/api/chat/sessions` | Listar sesiones |
+| GET | `/api/chat/session/{id}/history` | Historial sesión |
+| POST | `/api/chat/session/{id}/close` | Cerrar sesión |
 
-#### Crear o recuperar sesión de chat
+### Usuarios (requiere ADMIN)
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/users` | Listar todos |
+| GET | `/api/users/me` | Perfil actual |
+| GET | `/api/users/{idCard}` | Usuario por ID |
+| GET | `/api/users/active` | Usuarios activos |
+| GET | `/api/users/role/{role}` | Por rol |
 
-POST `/api/chat/session`
+**Documentación interactiva:** `http://localhost:8080/swagger-ui.html`
 
-Headers:
+## Comandos Makefile
 
-- `Content-Type: application/json`
-- `Authorization: Bearer {token}`
-
-Respuesta de ejemplo:
-
-```json
-{
-  "id": 1,
-  "sessionId": "38c2a0d1-c889-48e0-9c63-a41f04cbb787",
-  "user": {
-    "idCard": 1234567890,
-    "firstName": "Breiner",
-    "lastName": "López",
-    "email": "breiner@example.com"
-  },
-  "n8nSessionId": "38c2a0d1-c889-48e0-9c63-a41f04cbb787",
-  "createdAt": "2025-01-15T10:30:00",
-  "lastActivity": "2025-01-15T10:30:00",
-  "active": true
-}
+```bash
+make help              # Ver todos los comandos
+make up                # Levantar servicios dev
+make up-mon            # Con monitoreo (Prometheus, Grafana, Graphite)
+make down              # Bajar servicios
+make build             # Build sin cache
+make logs              # Ver logs todos
+make logs-backend      # Solo backend
+make status            # Estado y health checks
+make shell-backend     # Shell en backend
+make shell-db          # psql en postgres
+make db-backup         # Backup BD
+make clean-all         # Limpiar todo (volúmenes, imágenes)
+make prod-up           # Levantar producción
 ```
 
-#### Enviar mensaje de chat
+## Arquitectura
 
-POST `/api/chat/message`
+Ver [ARCHITECTURE.md](docs/ARCHITECTURE.md) para detalles completos:
+- 3 capas: Presentación → Negocio → Persistencia
+- Flujo completo: Frontend → Spring Boot → n8n → PostgreSQL
+- Patrones: MVC, Service Layer, DTO, Repository, DI, Filter, Strategy
+- Escalabilidad horizontal (stateless JWT)
 
-Headers:
+## Base de Datos
 
-- `Content-Type: application/json`
-- `Authorization: Bearer {token}`
+Ver [DATABASE.md](docs/DATABASE.md):
+- Tablas: USUARIO, CHAT_SESSION, CHAT_MESSAGE
+- Índices optimizados
+- Constraints FK, UNIQUE, CHECK
+- Queries comunes y estadísticas
 
-Request body:
+## Despliegue Producción
 
-```json
-{
-  "chatInput": "muy bien gracias, como vas? soy breiner"
-}
+```bash
+# 1. Configurar .env con valores producción
+# 2. Build y up con compose prod
+make prod-build
+make prod-up
+
+# Servicios en prod:
+# - Frontend: puerto 80/443 (nginx)
+# - Backend: puerto 8080 (interno)
+# - Postgres: puerto 5432 (interno)
+# - Monitoreo: puertos 9090, 3000
 ```
 
-Respuesta de ejemplo:
+## Documentación
 
-```json
-{
-  "sessionId": "38c2a0d1-c889-48e0-9c63-a41f04cbb787",
-  "message": "muy bien gracias, como vas? soy breiner",
-  "response": "¡Hola Breiner! Me alegra saludarte. Todo va bien por aquí..."
-}
+| Archivo | Descripción |
+|---------|-------------|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura, capas, flujos, patrones |
+| [API.md](docs/API.md) | Referencia completa endpoints + ejemplos |
+| [AUTHENTICATION.md](docs/AUTHENTICATION.md) | JWT, BCrypt, Spring Security detalles |
+| [CHAT_SYSTEM.md](docs/CHAT_SYSTEM.md) | Chat, n8n, ciclo de vida sesiones |
+| [DATABASE.md](docs/DATABASE.md) | Esquema BD, queries, índices |
+| [INSTALLATION.md](docs/INSTALLATION.md) | Guía instalación paso a paso |
+
+## Seguridad
+
+- **BCrypt** strength=10 para contraseñas (~100ms/hash)
+- **JWT** HS256, expiración 24h, claims: sub, iat, exp, iss, role
+- **Stateless**: Sin sesiones en servidor
+- **CORS**: Configurado para desarrollo (`*`)
+- **HTTPS**: Requerido en producción
+- **Variables de entorno**: Secrets nunca en código
+
+## Monitoreo
+
+- **Prometheus**: Métricas Spring Boot Actuator (`/actuator/prometheus`)
+- **Grafana**: Dashboards preconfigurados (Spring Boot, JVM, DB)
+- **Graphite**: Métricas legacy (opcional)
+- **Health checks**: PostgreSQL, Backend
+
+## Testing
+
+```bash
+# Backend tests
+cd bcrypt2025-springboot
+./mvnw test
+
+# Frontend lint
+cd bcrypt2025-front-end
+npm run lint
 ```
 
-#### Cerrar sesión de chat
+## Contribuir
 
-POST `/api/chat/session/{sessionId}/close`
+1. Fork del repositorio
+2. Crear feature branch (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit changes (`git commit -am 'Add nueva funcionalidad'`)
+4. Push branch (`git push origin feature/nueva-funcionalidad`)
+5. Crear Pull Request
 
-Headers:
+## Licencia
 
-- `Authorization: Bearer {token}`
+Proyecto privado - AlphaBrein 2025
 
-Respuesta esperada: `200 OK`
+## Contacto
 
-#### Obtener historial de una sesión
+- **Autor**: Breiner Martinez
+- **Email**: breinersmartinezmunoz@gmail.com o breynersmartinezmunoz@gmail.com
+- **Repositorio**: GitHub
 
-GET `/api/chat/session/{sessionId}/history`
+---
 
-Headers:
-
-- `Authorization: Bearer {token}`
-
-#### Obtener todas las sesiones del usuario
-
-GET `/api/chat/sessions`
-
-Headers:
-
-- `Authorization: Bearer {token}`
-
-## Ejemplos de uso
-
-### JavaScript (Fetch)
-
-1. Iniciar sesión en `/api/auth/login`.
-2. Enviar el token en el encabezado `Authorization: Bearer {token}`.
-3. Crear sesión en `/api/chat/session`.
-4. Enviar mensajes a `/api/chat/message`.
-5. Cerrar sesión en `/api/chat/session/{sessionId}/close`.
-
-### Python (requests)
-
-1. Iniciar sesión en `/api/auth/login`.
-2. Agregar el token en `Authorization`.
-3. Crear sesión en `/api/chat/session`.
-4. Enviar mensajes a `/api/chat/message`.
-5. Cerrar sesión en `/api/chat/session/{sessionId}/close`.
-
-## Notas
-
-- El proyecto se centra en la seguridad de contraseñas mediante bcrypt y en la gestión de autenticación con JWT.
-- La separación del frontend y backend permite un desarrollo independiente más claro.
-- La configuración de la base de datos y las variables de entorno se realiza en los archivos correspondientes de cada subproyecto.
+**Última actualización**: Agosto 2026  
+**Versión**: 1.0.0  
+**Estado**: Producción lista

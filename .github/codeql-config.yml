@@ -1,0 +1,29 @@
+name: "AlphaBrein CodeQL Config"
+
+disable-default-queries: false
+
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+paths-ignore:
+  - "**/target/**"
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/*.generated.*"
+  - "**/test/**"
+  - "**/*Test*.java"
+
+paths:
+  - "bcrypt2025-springboot/src/main/java/**"
+  - "bcrypt2025-front-end/src/**"
+
+packageregex:
+  - "com.example.bcrypt2025.*"
+
+extractor-options:
+  java:
+    build-mode: "none"
+  javascript:
+    extractor-option:
+      - "tsconfig=bcrypt2025-front-end/tsconfig.json"

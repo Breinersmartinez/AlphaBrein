@@ -1,0 +1,120 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: alphabrein-prod
+
+resources:
+  - ../../base
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+  app.kubernetes.io/environment: production
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: alphabrein-backend
+      spec:
+        replicas: 3
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 25%
+            maxUnavailable: 25%
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    memory: "1Gi"
+                    cpu: "500m"
+                  limits:
+                    memory: "2Gi"
+                    cpu: "2000m"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name=alphabrein-backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: alphabrein-frontend
+      spec:
+        replicas: 3
+        template:
+          spec:
+            containers:
+              - name: frontend
+                resources:
+                  requests:
+                    memory: "256Mi"
+                    cpu: "250m"
+                  limits:
+                    memory: "512Mi"
+                    cpu: "1000m"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name=alphabrein-frontend
+
+  - patch: |-
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: alphabrein-secrets
+      stringData:
+        URL_DB: "jdbc:postgresql://postgres-prod:5432/alphabrein"
+        USER_NAME: "alphabrein_prod"
+        PASSWORD_DB: "PROD_PASSWORD"
+        TOKEN_JWT: "PROD_JWT_SECRET"
+    target:
+      kind: Secret
+      name: alphabrein-secrets
+
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: alphabrein-ingress
+      spec:
+        tls:
+          - hosts:
+              - alphabrein.example.com
+              - api.alphabrein.example.com
+            secretName: alphabrein-tls-prod
+    target:
+      kind: Ingress
+      name: alphabrein-ingress
+
+images:
+  - name: ghcr.io/alphabrein/alphabrein/backend
+    newTag: prod-latest
+  - name: ghcr.io/alphabrein/alphabrein/frontend
+    newTag: prod-latest
+
+replacements:
+  - source:
+      kind: Service
+      name: alphabrein-backend
+    targets:
+      - select:
+          kind: Ingress
+        fieldPaths:
+          - spec.rules[1].http.paths[0].backend.service.name
+    options:
+      create: true
+  - source:
+      kind: Service
+      name: alphabrein-frontend
+    targets:
+      - select:
+          kind: Ingress
+        fieldPaths:
+          - spec.rules[0].http.paths[0].backend.service.name
+    options:
+      create: true

@@ -1,0 +1,39 @@
+# Dependency Review Configuration
+# Used by actions/dependency-review-action
+
+# Fail the build if any vulnerability with severity HIGH or CRITICAL is found
+fail-on-severity: high
+
+# Allow list for known acceptable vulnerabilities (with justification)
+allow-ghsas:
+  # Example: GHSA-xxxx-xxxx-xxxx - "Acceptable risk: internal tool only"
+  # Add GHSA IDs here with comments explaining why they're acceptable
+
+# Configuration for specific ecosystems
+config-file: |
+  # Maven configuration
+  maven:
+    # Ignore specific vulnerabilities for internal dependencies
+    # ignore-vulnerabilities:
+    #   - "CVE-2023-XXXX"
+
+  # NPM configuration
+  npm:
+    # Ignore dev dependencies for vulnerability scanning
+    dev-dependencies: false
+    # Ignore specific packages
+    # ignore-packages:
+    #   - "some-package@1.0.0"
+
+# Licenses that are not allowed
+disallowed-licenses:
+  - "GPL-3.0-only"
+  - "AGPL-3.0-only"
+  - "SSPL-1.0"
+
+# Allowed licenses (if specified, only these are allowed)
+# allowed-licenses:
+#   - "MIT"
+#   - "Apache-2.0"
+#   - "BSD-3-Clause"
+#   - "ISC"
